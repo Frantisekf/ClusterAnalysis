@@ -10,6 +10,7 @@
 #include <assert.h>
 #include <math.h> // sqrtf
 #include <limits.h> // INT_MAX
+#include <errno.h>
 
 
 /*****************************************************************
@@ -324,7 +325,6 @@ void print_cluster(struct cluster_t *c)
 int load_clusters(char *filename, struct cluster_t **arr)
 {
 	int count, id, x, y;
-
 	
     assert(arr != NULL);
     FILE *file = fopen(filename, "r");
@@ -347,10 +347,24 @@ int load_clusters(char *filename, struct cluster_t **arr)
 		 
 		 if(fscanf(file, "%d %d %d", &id, &x, &y) == 3){
 			struct obj_t new_object;
+			
+			for(int j = 0; j < i; j++){
+				if(id == (*arr)[j].obj->id){
+					fprintf(stderr, "subor obsahuje viackrat rovnake ID objektu\n");
+					 for(int j = i - 1; j >= 0; j--){
+						clear_cluster(&(*arr)[j]);
+					}
+					free(*arr);
+					*arr = NULL;
+					fclose(file);
+					return 0;
+				}
+			}
 			new_object.id = id;
 			new_object.x = x;
 			new_object.y = y;
-		 
+			
+			
 			init_cluster(&(*arr)[i], CLUSTER_CHUNK);
 			
 			append_cluster(&(*arr)[i], new_object);
@@ -391,18 +405,37 @@ int main(int argc, char *argv[])
     int final_number_of_clusters;
     int cluster_count;
     int index1, index2;
+    long number;
+    char *end_ptr;
     
     
     
-    if(argc == 2){
-		final_number_of_clusters = 1;
-	}
-	else if(argc == 3){		
-		final_number_of_clusters = atoi(argv[2]);
 		
-	}
-	else{
-		//chybova hlaska
+	if(argc == 2){
+		final_number_of_clusters = 1;
+	
+	}else if(argc == 3){		
+		errno = 0;
+		number = strtol(argv[2], &end_ptr, 10);
+		
+		if(errno){
+			fprintf(stderr,"Nastal overflow vstupu zadajte argument N znova.\n");
+			return 1;
+		}
+		else if(number < 0){
+			fprintf(stderr,"Bolo zadane zaporne cislo\n");
+			return 1;
+		}
+		else if( *end_ptr != '\0' ){
+			fprintf(stderr,"Na vstup bolo zadane bud cislo typu float alebo nejaky string\n");
+			return 1;			
+		}else{	
+			final_number_of_clusters = number;				
+		}
+		
+		
+	}else{
+		fprintf(stderr, "Nespravny tvar parametrov! Pre spustenie programu zadajte parametre vo formate ./proj3 SUBOR N\n");
 		return 1;
 	}
 	
@@ -422,12 +455,12 @@ int main(int argc, char *argv[])
 		free(clusters);
 		return 1;
 	}
-	//print_clusters(clusters, cluster_count);
+	
 	
 	while(cluster_count != final_number_of_clusters){
 	
 	find_neighbours(clusters, cluster_count, &index1, &index2);
-	//printf("Dva najblizsie shluky su %d a %d\n", index1, index2);
+	
 	
 	merge_clusters(&clusters[index1], &clusters[index2]);
 	cluster_count = remove_cluster(clusters, cluster_count, index2);
